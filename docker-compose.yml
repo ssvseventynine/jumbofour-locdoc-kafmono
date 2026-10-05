@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # TIER 3a: MySQL Storage Container
+  jumbofour-mysql:
+    image: mysql:8.0
+    container_name: jumbofour-mysql
+    networks:
+      - jumbofour-network
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: Sidhant@123
+      MYSQL_DATABASE: jumbofour_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # TIER 3b: Kafka KRaft Broker Container
+  jumbofour-kafka:
+    image: apache/kafka:latest
+    container_name: jumbofour-kafka
+    networks:
+      - jumbofour-network
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://jumbofour-kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@jumbofour-kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: q1rvsxz8SeyIoA3oA77bQg
+      # Fixed single-broker local optimization parameters:
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  # TIER 2: Spring Boot Monolith Backend Container
+  jumbofour-backend:
+    build: .
+    container_name: jumbofour-backend
+    networks:
+      - jumbofour-network
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: jumbofour-mysql
+      DB_NAME: jumbofour_db
+      DB_USER: root
+      DB_PASS: Sidhant@123
+      KAFKA_HOST: jumbofour-kafka:9092
+    depends_on:
+      - jumbofour-mysql
+      - jumbofour-kafka
+
+  # TIER 1: Vue.js Frontend Container
+  jumbofour-frontend:
+    image: node:lts-alpine
+    container_name: jumbofour-frontend
+    networks:
+      - jumbofour-network
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+
+networks:
+  jumbofour-network:
+    external: true
+
+volumes:
+  mysql_data:
